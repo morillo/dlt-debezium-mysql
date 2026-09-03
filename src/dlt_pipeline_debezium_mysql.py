@@ -115,8 +115,8 @@ def load_latest_event_schema(path):
     )
     if not rows:
         raise ValueError(
-            "No Debezium event files found under {}. The pipeline cannot "
-            "derive a schema until at least one event has landed.".format(path)
+            f"No Debezium event files found under {path}. The pipeline cannot "
+            "derive a schema until at least one event has landed."
         )
     return json.loads(rows[0]["schema"])
 
@@ -191,9 +191,9 @@ envelope = StructType(
 
 
 @dlt.table(
-    name="bronze_{}".format(table_name),
-    comment="Raw Debezium CDC events for {}.{}, incrementally "
-    "ingested with Auto Loader".format(database, table_name),
+    name=f"bronze_{table_name}",
+    comment=f"Raw Debezium CDC events for {database}.{table_name}, "
+    "incrementally ingested with Auto Loader",
     table_properties={"quality": "bronze"},
 )
 def bronze():
@@ -224,14 +224,12 @@ def flatten_struct(schema, prefix=""):
 
 
 @dlt.view(
-    name="bronze_clean_{}".format(table_name),
-    comment="Flattened CDC rows for {} feeding the silver merge".format(
-        table_name
-    ),
+    name=f"bronze_clean_{table_name}",
+    comment=f"Flattened CDC rows for {table_name} feeding the silver merge",
 )
 @dlt.expect_or_drop("valid_op", "op IS NOT NULL")
 def bronze_clean():
-    payload_df = dlt.read_stream("bronze_{}".format(table_name)).select(
+    payload_df = dlt.read_stream(f"bronze_{table_name}").select(
         "payload.*"
     )
     # Deletes carry the row image in `before`; everything else in `after`.
@@ -253,23 +251,23 @@ def bronze_clean():
         template = LOGICAL_CONVERTERS.get(logical)
         if template and name in df.columns:
             df = df.withColumn(
-                name, F.expr(template.format(c="`{}`".format(name)))
+                name, F.expr(template.format(c=f"`{name}`"))
             )
     return df
 
 
 dlt.create_streaming_table(
-    name="{}_final".format(table_name),
-    comment="Current-state {} rows merged from Debezium CDC "
-    "(SCD type 1, deletes applied)".format(table_name),
+    name=f"{table_name}_final",
+    comment=f"Current-state {table_name} rows merged from Debezium CDC "
+    "(SCD type 1, deletes applied)",
     table_properties={"quality": "silver"},
 )
 
 # ts_ms has millisecond granularity, so ties are possible for rapid changes to
 # the same row; the binlog position (source.pos) breaks them deterministically.
 dlt.apply_changes(
-    target="{}_final".format(table_name),
-    source="bronze_clean_{}".format(table_name),
+    target=f"{table_name}_final",
+    source=f"bronze_clean_{table_name}",
     keys=key_columns,
     sequence_by=F.struct(F.col("ts_ms"), F.col("source_pos")),
     apply_as_deletes=F.expr("op = 'd'"),
