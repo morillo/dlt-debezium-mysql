@@ -1,0 +1,22 @@
+# Pipeline resource for the single-table Debezium CDC pipeline.
+# One deployed pipeline ingests one source table; the table is chosen
+# entirely through bundle variables.
+
+resources:
+  pipelines:
+    dlt_debezium_mysql:
+      name: dlt-debezium-mysql-${var.tablename}-${bundle.target}
+      catalog: ${var.catalog}
+      schema: ${var.target_schema}
+      serverless: true
+      continuous: false # run triggered; schedule with a job or enable
+      channel: CURRENT
+      root_path: ../src
+      libraries:
+        - glob:
+            include: ../src/dlt_pipeline_debezium_mysql.py
+      configuration:
+        pipeline.landing_root: ${var.landing_root}
+        pipeline.database: ${var.database}
+        pipeline.tablename: ${var.tablename}
+        pipeline.tablekeys: ${var.tablekeys}
